@@ -350,9 +350,6 @@ namespace GhostKey
         readonly GhostKeyDetector det;
         readonly NumericUpDown nGap, nDwell, nBurst, nWindow, nStuck, nStuckMod;
         readonly CheckBox autostartBox, notifyBox;
-        readonly ListBox disabledList;
-        readonly List<int> disabledVKs = new List<int>();
-        KeyboardPanel keyboardPanel;
 
         public SettingsForm(GhostKeyDetector detector, bool autostartOn)
         {
@@ -365,27 +362,14 @@ namespace GhostKey
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(700, 600);
-            StartPosition = FormStartPosition.CenterScreen;
+            AutoSize = true;
+            AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            Padding = new Padding(16);
 
-            TabControl tabs = new TabControl();
-            tabs.Dock = DockStyle.Fill;
-            tabs.Padding = new Point(8, 8);
-
-            // Aba 1: Teclado Visual
-            TabPage tabKeyboard = new TabPage("Teclado Visual");
-            keyboardPanel = new KeyboardPanel(det);
-            keyboardPanel.Dock = DockStyle.Fill;
-            tabKeyboard.Controls.Add(keyboardPanel);
-            tabs.TabPages.Add(tabKeyboard);
-
-            // Aba 2: Configurações (parte sensibilidade)
-            TabPage tabSettings = new TabPage("Configurações");
             TableLayoutPanel t = new TableLayoutPanel();
             t.ColumnCount = 3;
-            t.AutoSize = false;
-            t.Dock = DockStyle.Fill;
-            t.Padding = new Padding(12);
+            t.AutoSize = true;
+            t.AutoSizeMode = AutoSizeMode.GrowAndShrink;
 
             AddHeader(t, "Sensibilidade");
             nGap = AddRow(t, "Soltar e apertar a mesma tecla de novo em menos de", 1, 500, "ms");
@@ -401,83 +385,27 @@ namespace GhostKey
             autostartBox = AddCheck(t, "Iniciar com o Windows (em segundo plano)", autostartOn);
 
             LoadValues(det);
-            tabSettings.Controls.Add(t);
-            tabs.TabPages.Add(tabSettings);
 
-            // Aba 3: Teclas Desativadas (gerenciamento)
-            TabPage tabDisabled = new TabPage("Teclas Desativadas");
-            TableLayoutPanel tDisabled = new TableLayoutPanel();
-            tDisabled.ColumnCount = 1;
-            tDisabled.Dock = DockStyle.Fill;
-            tDisabled.Padding = new Padding(12);
-            tDisabled.AutoSize = false;
-
-            Label lblDisabled = new Label(); lblDisabled.Text = "Teclas desativadas:"; lblDisabled.AutoSize = true; lblDisabled.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            tDisabled.Controls.Add(lblDisabled);
-
-            disabledList = new ListBox();
-            disabledList.Height = 180;
-            disabledList.Dock = DockStyle.Top;
-            RefreshDisabledList();
-            tDisabled.Controls.Add(disabledList);
-
-            FlowLayoutPanel disabledButtons = new FlowLayoutPanel();
-            disabledButtons.AutoSize = true;
-            disabledButtons.WrapContents = false;
-            disabledButtons.Margin = new Padding(0, 8, 0, 0);
-
-            Button reactivate = new Button(); reactivate.Text = "Reativar selecionada"; reactivate.AutoSize = true;
-            reactivate.Click += delegate
-            {
-                int idx = disabledList.SelectedIndex;
-                if (idx >= 0 && idx < disabledVKs.Count)
-                {
-                    det.EnableKey(disabledVKs[idx]);
-                    Settings.Save(det);
-                    RefreshDisabledList();
-                    keyboardPanel.Refresh();
-                }
-            };
-
-            Button removeAll = new Button(); removeAll.Text = "Limpar todas"; removeAll.AutoSize = true;
-            removeAll.Click += delegate
-            {
-                if (MessageBox.Show("Reativar todas as teclas desativadas?", "Confirmar",
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                {
-                    foreach (int vk in det.DisabledKeys())
-                        det.EnableKey(vk);
-                    Settings.Save(det);
-                    RefreshDisabledList();
-                    keyboardPanel.Refresh();
-                }
-            };
-
-            disabledButtons.Controls.Add(reactivate);
-            disabledButtons.Controls.Add(removeAll);
-            tDisabled.Controls.Add(disabledButtons);
-            tabDisabled.Controls.Add(tDisabled);
-            tabs.TabPages.Add(tabDisabled);
-
-            // Botões finais
             FlowLayoutPanel buttons = new FlowLayoutPanel();
-            buttons.Dock = DockStyle.Bottom;
             buttons.AutoSize = true;
-            buttons.FlowDirection = FlowDirection.RightToLeft;
-            buttons.Padding = new Padding(12);
-
+            buttons.WrapContents = false;
+            buttons.Anchor = AnchorStyles.Right;
+            buttons.Margin = new Padding(3, 12, 3, 3);
             Button save = new Button(); save.Text = "Salvar"; save.AutoSize = true;
             save.Click += delegate { Save(); };
+            Button defaults = new Button(); defaults.Text = "Restaurar padrões"; defaults.AutoSize = true;
+            defaults.Click += delegate { LoadValues(new GhostKeyDetector()); };
             Button cancel = new Button(); cancel.Text = "Cancelar"; cancel.AutoSize = true;
             cancel.DialogResult = DialogResult.Cancel;
             buttons.Controls.Add(save);
+            buttons.Controls.Add(defaults);
             buttons.Controls.Add(cancel);
-
-            Controls.Add(tabs);
-            Controls.Add(buttons);
+            t.Controls.Add(buttons);
+            t.SetColumnSpan(buttons, 3);
 
             AcceptButton = save;
             CancelButton = cancel;
+            Controls.Add(t);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -541,25 +469,6 @@ namespace GhostKey
             nStuckMod.Value = Clamp(nStuckMod, src.StuckThresholdModifier / 1000.0);
         }
 
-        void RefreshDisabledList()
-        {
-            disabledList.Items.Clear();
-            disabledVKs.Clear();
-            int[] disabled = det.DisabledKeys();
-            if (disabled.Length == 0)
-            {
-                disabledList.Items.Add("(nenhuma)");
-            }
-            else
-            {
-                foreach (int vk in disabled)
-                {
-                    string name = KeyNames.Get(vk);
-                    disabledList.Items.Add(name + " (0x" + vk.ToString("X2") + ")");
-                    disabledVKs.Add(vk);
-                }
-            }
-        }
 
         void Save()
         {
@@ -782,17 +691,42 @@ namespace GhostKey
             countLabel.Margin = new Padding(3, 4, 3, 10);
             root.Controls.Add(countLabel);
 
-            Label header = new Label();
-            header.Text = "Teclas desativadas (até reiniciar):";
-            header.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
-            header.AutoSize = true;
-            header.Anchor = AnchorStyles.Left;
-            root.Controls.Add(header);
+            // TabControl com Teclado Visual e Lista de Teclas
+            TabControl tabs = new TabControl();
+            tabs.Dock = DockStyle.Fill;
+            tabs.Padding = new Point(4, 4);
+
+            // Aba 1: Teclado Visual
+            TabPage tabKeyboard = new TabPage("Teclado Visual");
+            KeyboardPanel keyboardPanel = new KeyboardPanel(detector);
+            keyboardPanel.Dock = DockStyle.Fill;
+            tabKeyboard.Controls.Add(keyboardPanel);
+            tabs.TabPages.Add(tabKeyboard);
+
+            // Aba 2: Lista de Teclas Desativadas
+            TabPage tabList = new TabPage("Teclas Desativadas");
+            TableLayoutPanel tList = new TableLayoutPanel();
+            tList.ColumnCount = 1;
+            tList.Dock = DockStyle.Fill;
+            tList.Padding = new Padding(8);
 
             disabledList = new ListBox();
             disabledList.Dock = DockStyle.Fill;
             disabledList.IntegralHeight = false;
-            root.Controls.Add(disabledList);
+            tList.Controls.Add(disabledList);
+
+            FlowLayoutPanel listButtons = new FlowLayoutPanel();
+            listButtons.AutoSize = true;
+            listButtons.WrapContents = false;
+            listButtons.Margin = new Padding(0, 8, 0, 0);
+            Button btnReactivate = MakeButton("Reativar selecionada", ReenableSelected);
+            listButtons.Controls.Add(btnReactivate);
+            tList.Controls.Add(listButtons);
+
+            tabList.Controls.Add(tList);
+            tabs.TabPages.Add(tabList);
+
+            root.Controls.Add(tabs);
 
             autostartBox = new CheckBox();
             autostartBox.Text = "Iniciar com o Windows (em segundo plano)";

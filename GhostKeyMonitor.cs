@@ -336,6 +336,7 @@ namespace GhostKey
                 if (idx >= 0 && idx < disabledVKs.Count)
                 {
                     det.EnableKey(disabledVKs[idx]);
+                    Settings.Save(det);
                     RefreshDisabledList();
                 }
             };
@@ -347,6 +348,7 @@ namespace GhostKey
                 {
                     foreach (int vk in det.DisabledKeys())
                         det.EnableKey(vk);
+                    Settings.Save(det);
                     RefreshDisabledList();
                 }
             };

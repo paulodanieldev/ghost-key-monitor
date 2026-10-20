@@ -276,6 +276,73 @@ namespace GhostKey
         }
     }
 
+    // ------------------------------------------------------ painel do teclado visual
+    class KeyboardPanel : Panel
+    {
+        readonly GhostKeyDetector detector;
+        readonly int[][] layout = new int[][]
+        {
+            new int[] {0x60,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x30,0xBD,0xBB,0x08},
+            new int[] {0x09,0x51,0x57,0x45,0x52,0x54,0x59,0x55,0x49,0x4F,0x50,0xDB,0xDD,0xDC},
+            new int[] {0x14,0x41,0x53,0x44,0x46,0x47,0x48,0x4A,0x4B,0x4C,0xBA,0xDE,0x0D},
+            new int[] {0xA0,0x5A,0x58,0x43,0x56,0x42,0x4E,0x4D,0xBC,0xBE,0xBF,0xA1},
+            new int[] {0xA2,0xA4,0x20,0xA3}
+        };
+        readonly string[][] names = new string[][]
+        {
+            new string[] {"`","1","2","3","4","5","6","7","8","9","0","-","=","⌫"},
+            new string[] {"⇥","Q","W","E","R","T","Y","U","I","O","P","[","]","\\"},
+            new string[] {"⇪","A","S","D","F","G","H","J","K","L",";","'","↵"},
+            new string[] {"⇧","Z","X","C","V","B","N","M",",",".","/","⇧"},
+            new string[] {"⌃","⌘","Space","⌘"}
+        };
+
+        public KeyboardPanel(GhostKeyDetector det)
+        {
+            detector = det;
+            DoubleBuffered = true;
+            BackColor = SystemColors.Window;
+            MinimumSize = new Size(600, 250);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            int[] disabled = detector.DisabledKeys();
+            var disabledSet = new HashSet<int>(disabled);
+
+            int x = 8, y = 8, keyW = 32, keyH = 32, margin = 4;
+            var font = new Font("Segoe UI", 8f);
+            var brushDisabled = new SolidBrush(Color.FromArgb(220, 100, 100));
+            var brushEnabled = new SolidBrush(SystemColors.ControlLight);
+            var penBorder = new Pen(Color.Black, 1);
+
+            int rowIdx = 0;
+            foreach (int[] row in layout)
+            {
+                x = 8;
+                foreach (int vk in row)
+                {
+                    int idx = Array.IndexOf(row, vk);
+                    string name = names[rowIdx][idx];
+                    bool isDisabled = disabledSet.Contains(vk);
+
+                    e.Graphics.FillRectangle(isDisabled ? brushDisabled : brushEnabled, x, y, keyW, keyH);
+                    e.Graphics.DrawRectangle(penBorder, x, y, keyW, keyH);
+                    StringFormat sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    e.Graphics.DrawString(name, font, Brushes.Black, new RectangleF(x, y, keyW, keyH), sf);
+                    x += keyW + margin;
+                }
+                y += keyH + margin;
+                rowIdx++;
+            }
+            font.Dispose();
+            brushDisabled.Dispose();
+            brushEnabled.Dispose();
+            penBorder.Dispose();
+        }
+    }
+
     // ------------------------------------------------------ janela de configuracao
     class SettingsForm : Form
     {
@@ -285,6 +352,7 @@ namespace GhostKey
         readonly CheckBox autostartBox, notifyBox;
         readonly ListBox disabledList;
         readonly List<int> disabledVKs = new List<int>();
+        KeyboardPanel keyboardPanel;
 
         public SettingsForm(GhostKeyDetector detector, bool autostartOn)
         {
@@ -297,14 +365,27 @@ namespace GhostKey
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
-            AutoSize = true;
-            AutoSizeMode = AutoSizeMode.GrowAndShrink;
-            Padding = new Padding(16);
+            ClientSize = new Size(700, 600);
+            StartPosition = FormStartPosition.CenterScreen;
 
+            TabControl tabs = new TabControl();
+            tabs.Dock = DockStyle.Fill;
+            tabs.Padding = new Point(8, 8);
+
+            // Aba 1: Teclado Visual
+            TabPage tabKeyboard = new TabPage("Teclado Visual");
+            keyboardPanel = new KeyboardPanel(det);
+            keyboardPanel.Dock = DockStyle.Fill;
+            tabKeyboard.Controls.Add(keyboardPanel);
+            tabs.TabPages.Add(tabKeyboard);
+
+            // Aba 2: Configurações (parte sensibilidade)
+            TabPage tabSettings = new TabPage("Configurações");
             TableLayoutPanel t = new TableLayoutPanel();
             t.ColumnCount = 3;
-            t.AutoSize = true;
-            t.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            t.AutoSize = false;
+            t.Dock = DockStyle.Fill;
+            t.Padding = new Padding(12);
 
             AddHeader(t, "Sensibilidade");
             nGap = AddRow(t, "Soltar e apertar a mesma tecla de novo em menos de", 1, 500, "ms");
@@ -319,16 +400,32 @@ namespace GhostKey
             notifyBox = AddCheck(t, "Mostrar notificação do Windows ao detectar", Settings.Notify);
             autostartBox = AddCheck(t, "Iniciar com o Windows (em segundo plano)", autostartOn);
 
-            AddHeader(t, "Teclas desativadas");
+            LoadValues(det);
+            tabSettings.Controls.Add(t);
+            tabs.TabPages.Add(tabSettings);
+
+            // Aba 3: Teclas Desativadas (gerenciamento)
+            TabPage tabDisabled = new TabPage("Teclas Desativadas");
+            TableLayoutPanel tDisabled = new TableLayoutPanel();
+            tDisabled.ColumnCount = 1;
+            tDisabled.Dock = DockStyle.Fill;
+            tDisabled.Padding = new Padding(12);
+            tDisabled.AutoSize = false;
+
+            Label lblDisabled = new Label(); lblDisabled.Text = "Teclas desativadas:"; lblDisabled.AutoSize = true; lblDisabled.Font = new Font("Segoe UI", 10f, FontStyle.Bold);
+            tDisabled.Controls.Add(lblDisabled);
+
             disabledList = new ListBox();
-            disabledList.Height = 80;
-            disabledList.Width = 400;
+            disabledList.Height = 180;
+            disabledList.Dock = DockStyle.Top;
             RefreshDisabledList();
-            t.Controls.Add(disabledList);
-            t.SetColumnSpan(disabledList, 3);
+            tDisabled.Controls.Add(disabledList);
+
             FlowLayoutPanel disabledButtons = new FlowLayoutPanel();
             disabledButtons.AutoSize = true;
             disabledButtons.WrapContents = false;
+            disabledButtons.Margin = new Padding(0, 8, 0, 0);
+
             Button reactivate = new Button(); reactivate.Text = "Reativar selecionada"; reactivate.AutoSize = true;
             reactivate.Click += delegate
             {
@@ -338,8 +435,10 @@ namespace GhostKey
                     det.EnableKey(disabledVKs[idx]);
                     Settings.Save(det);
                     RefreshDisabledList();
+                    keyboardPanel.Refresh();
                 }
             };
+
             Button removeAll = new Button(); removeAll.Text = "Limpar todas"; removeAll.AutoSize = true;
             removeAll.Click += delegate
             {
@@ -350,35 +449,35 @@ namespace GhostKey
                         det.EnableKey(vk);
                     Settings.Save(det);
                     RefreshDisabledList();
+                    keyboardPanel.Refresh();
                 }
             };
+
             disabledButtons.Controls.Add(reactivate);
             disabledButtons.Controls.Add(removeAll);
-            t.Controls.Add(disabledButtons);
-            t.SetColumnSpan(disabledButtons, 3);
+            tDisabled.Controls.Add(disabledButtons);
+            tabDisabled.Controls.Add(tDisabled);
+            tabs.TabPages.Add(tabDisabled);
 
-            LoadValues(det);
-
+            // Botões finais
             FlowLayoutPanel buttons = new FlowLayoutPanel();
+            buttons.Dock = DockStyle.Bottom;
             buttons.AutoSize = true;
-            buttons.WrapContents = false;
-            buttons.Anchor = AnchorStyles.Right;
-            buttons.Margin = new Padding(3, 12, 3, 3);
+            buttons.FlowDirection = FlowDirection.RightToLeft;
+            buttons.Padding = new Padding(12);
+
             Button save = new Button(); save.Text = "Salvar"; save.AutoSize = true;
             save.Click += delegate { Save(); };
-            Button defaults = new Button(); defaults.Text = "Restaurar padrões"; defaults.AutoSize = true;
-            defaults.Click += delegate { LoadValues(new GhostKeyDetector()); };
             Button cancel = new Button(); cancel.Text = "Cancelar"; cancel.AutoSize = true;
             cancel.DialogResult = DialogResult.Cancel;
             buttons.Controls.Add(save);
-            buttons.Controls.Add(defaults);
             buttons.Controls.Add(cancel);
-            t.Controls.Add(buttons);
-            t.SetColumnSpan(buttons, 3);
+
+            Controls.Add(tabs);
+            Controls.Add(buttons);
 
             AcceptButton = save;
             CancelButton = cancel;
-            Controls.Add(t);
             ResumeLayout(false);
             PerformLayout();
         }

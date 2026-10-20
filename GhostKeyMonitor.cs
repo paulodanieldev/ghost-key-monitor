@@ -236,8 +236,10 @@ namespace GhostKey
                 string[] keys = kv["DisabledKeys"].Split(',');
                 foreach (string key in keys)
                 {
+                    string trimmed = key.Trim();
+                    string hexStr = trimmed.StartsWith("0x") ? trimmed.Substring(2) : trimmed;
                     int vk;
-                    if (int.TryParse(key.Trim(), System.Globalization.NumberStyles.HexNumber,
+                    if (int.TryParse(hexStr, System.Globalization.NumberStyles.HexNumber,
                         System.Globalization.CultureInfo.InvariantCulture, out vk))
                     {
                         d.DisableKeyTemporarily(vk);

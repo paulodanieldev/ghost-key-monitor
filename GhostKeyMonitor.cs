@@ -283,6 +283,8 @@ namespace GhostKey
         readonly GhostKeyDetector det;
         readonly NumericUpDown nGap, nDwell, nBurst, nWindow, nStuck, nStuckMod;
         readonly CheckBox autostartBox, notifyBox;
+        readonly ListBox disabledList;
+        readonly List<int> disabledVKs = new List<int>();
 
         public SettingsForm(GhostKeyDetector detector, bool autostartOn)
         {
@@ -316,6 +318,42 @@ namespace GhostKey
             AddHeader(t, "Geral");
             notifyBox = AddCheck(t, "Mostrar notificação do Windows ao detectar", Settings.Notify);
             autostartBox = AddCheck(t, "Iniciar com o Windows (em segundo plano)", autostartOn);
+
+            AddHeader(t, "Teclas desativadas");
+            disabledList = new ListBox();
+            disabledList.Height = 80;
+            disabledList.Width = 400;
+            RefreshDisabledList();
+            t.Controls.Add(disabledList);
+            t.SetColumnSpan(disabledList, 3);
+            FlowLayoutPanel disabledButtons = new FlowLayoutPanel();
+            disabledButtons.AutoSize = true;
+            disabledButtons.WrapContents = false;
+            Button reactivate = new Button(); reactivate.Text = "Reativar selecionada"; reactivate.AutoSize = true;
+            reactivate.Click += delegate
+            {
+                int idx = disabledList.SelectedIndex;
+                if (idx >= 0 && idx < disabledVKs.Count)
+                {
+                    det.EnableKey(disabledVKs[idx]);
+                    RefreshDisabledList();
+                }
+            };
+            Button removeAll = new Button(); removeAll.Text = "Limpar todas"; removeAll.AutoSize = true;
+            removeAll.Click += delegate
+            {
+                if (MessageBox.Show("Reativar todas as teclas desativadas?", "Confirmar",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                {
+                    foreach (int vk in det.DisabledKeys())
+                        det.EnableKey(vk);
+                    RefreshDisabledList();
+                }
+            };
+            disabledButtons.Controls.Add(reactivate);
+            disabledButtons.Controls.Add(removeAll);
+            t.Controls.Add(disabledButtons);
+            t.SetColumnSpan(disabledButtons, 3);
 
             LoadValues(det);
 
@@ -400,6 +438,26 @@ namespace GhostKey
             nWindow.Value = Clamp(nWindow, src.TimeWindow);
             nStuck.Value = Clamp(nStuck, src.StuckThreshold / 1000.0);
             nStuckMod.Value = Clamp(nStuckMod, src.StuckThresholdModifier / 1000.0);
+        }
+
+        void RefreshDisabledList()
+        {
+            disabledList.Items.Clear();
+            disabledVKs.Clear();
+            int[] disabled = det.DisabledKeys();
+            if (disabled.Length == 0)
+            {
+                disabledList.Items.Add("(nenhuma)");
+            }
+            else
+            {
+                foreach (int vk in disabled)
+                {
+                    string name = KeyNames.Get(vk);
+                    disabledList.Items.Add(name + " (0x" + vk.ToString("X2") + ")");
+                    disabledVKs.Add(vk);
+                }
+            }
         }
 
         void Save()
@@ -989,13 +1047,15 @@ namespace GhostKey
             if (alert == null) return;
             GhostInfo g = currentGhost;
             detector.DisableKeyTemporarily(g.Key);
-            AppLog.Warn("Tecla desativada temporariamente: '{0}'", g.KeyName);
+            AppLog.Warn("Tecla desativada permanentemente: '{0}'", g.KeyName);
             CloseAlert();
             RefreshDisabledList();
             MessageBox.Show(
-                "A tecla '" + g.KeyName + "' foi desativada.\n\n" +
-                "Ela volta a funcionar ao reiniciar o computador, ao sair do programa " +
-                "ou pelo botão \"Reativar selecionada\".",
+                "A tecla '" + g.KeyName + "' foi desativada permanentemente.\n\n" +
+                "Ela continuará desativada até você:\n" +
+                "• Reativá-la pelas Configurações\n" +
+                "• Excluir da lista de teclas desativadas\n" +
+                "• Desinstalar o programa",
                 "Tecla desativada", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 

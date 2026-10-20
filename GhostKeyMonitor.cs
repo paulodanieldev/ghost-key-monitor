@@ -229,11 +229,35 @@ namespace GhostKey
             d.StuckThreshold = Num(kv, "StuckThreshold", d.StuckThreshold, 1000, 120000);
             d.StuckThresholdModifier = Num(kv, "StuckThresholdModifier", d.StuckThresholdModifier, 5000, 600000);
             Notify = Num(kv, "Notify", 1, 0, 1) >= 1;
+
+            // Carregar teclas desativadas permanentemente
+            if (kv.ContainsKey("DisabledKeys"))
+            {
+                string[] keys = kv["DisabledKeys"].Split(',');
+                foreach (string key in keys)
+                {
+                    int vk;
+                    if (int.TryParse(key.Trim(), System.Globalization.NumberStyles.HexNumber,
+                        System.Globalization.CultureInfo.InvariantCulture, out vk))
+                    {
+                        d.DisableKeyTemporarily(vk);
+                    }
+                }
+            }
         }
 
         public static void Save(GhostKeyDetector d)
         {
             System.Globalization.CultureInfo inv = System.Globalization.CultureInfo.InvariantCulture;
+
+            // Salvar teclas desativadas em formato hexadecimal
+            string disabledKeys = "";
+            int[] disabled = d.DisabledKeys();
+            if (disabled.Length > 0)
+            {
+                disabledKeys = string.Join(",", System.Array.ConvertAll(disabled, vk => "0x" + vk.ToString("X2")));
+            }
+
             string[] lines = new string[]
             {
                 "GhostThreshold=" + d.GhostThreshold.ToString(inv),
@@ -242,7 +266,8 @@ namespace GhostKey
                 "TimeWindow=" + d.TimeWindow.ToString(inv),
                 "StuckThreshold=" + d.StuckThreshold.ToString(inv),
                 "StuckThresholdModifier=" + d.StuckThresholdModifier.ToString(inv),
-                "Notify=" + (Notify ? "1" : "0")
+                "Notify=" + (Notify ? "1" : "0"),
+                "DisabledKeys=" + disabledKeys
             };
             try { File.WriteAllLines(FilePath, lines, Encoding.UTF8); }
             catch (Exception ex) { AppLog.Error("Falha ao salvar configurações: {0}", ex.Message); }
